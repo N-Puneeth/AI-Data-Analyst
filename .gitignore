@@ -8,16 +8,50 @@ __pycache__/
 # Node
 frontend/node_modules/
 
+# =========================
+# ⚛️ FRONTEND (React/Node)
+# =========================
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
 # Build files
 dist/
 build/
 
+# Production builds
+dist/
+build/
+out/
+
+# NPM/Yarn error logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
 # VS Code
 .vscode/
 
+venv/
+env/
+.venv/
 
+.env
+.env.local
+.env.*.local
+*.pem
 
+# Compiled Python files
+__pycache__/
+*.py[cod]
+*$py.class
 
+# Testing and coverage
+.pytest_cache/
+htmlcov/
+.coverage
 
 __pycache__/
 *.py[codz]

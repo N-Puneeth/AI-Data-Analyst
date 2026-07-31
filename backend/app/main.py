@@ -1,21 +1,28 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(
-    title="AI Data Analyst Platform",
-    description="AI-powered analytics platform",
-    version="1.0.0"
+from app.routers import auth, data, ai , agent
+from app.core.database import Base, engine
+
+# 👇 THIS LINE BUILDS THE SQLITE DATABASE FILE 👇
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="DataPilot AI API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+# We add prefix="/api" so the backend matches the frontend exactly
+app.include_router(auth.router, prefix="/api")
+app.include_router(data.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
+app.include_router(agent.router, prefix="/api")
 
 @app.get("/")
-async def root():
-    return {
-        "message": "AI Data Analyst Platform Backend Running"
-    }
-
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy"
-    }
+def read_root():
+    return {"status": "DataPilot API is running smoothly!"}
