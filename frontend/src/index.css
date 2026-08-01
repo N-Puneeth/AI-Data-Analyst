@@ -4,4 +4,9 @@
   .no-print {
     display: none !important;
   }
+  
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
 }

@@ -5,8 +5,7 @@ import {
   Upload, Navigation, FileText, CheckCircle2, 
   Send, Plus, AlertTriangle, Terminal, BarChart2, Download, LogOut, MessageSquare
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+
 
 interface Message {
   id: string;
@@ -99,15 +98,12 @@ export default function PremiumDashboard() {
   };
 
   // --- EXISTING PDF EXPORT FUNCTION ---
-  const exportPDF = async () => {
-    if (!reportRef.current) return;
-    const canvas = await html2canvas(reportRef.current, { backgroundColor: '#0F172A' });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save('DataPilot_Report.pdf');
+  // --- NATIVE PDF EXPORT FUNCTION ---
+  const exportPDF = () => {
+    // This triggers the browser's print dialog. 
+    // The user can select "Save as PDF" as the destination.
+    // Our @media print CSS will automatically hide the sidebars and buttons!
+    window.print();
   };
 
   const downloadImage = (base64String: string, index: number) => {
