@@ -154,6 +154,34 @@ export default function PremiumDashboard() {
     }
   };
 
+
+  // Function 1: Export as a Markdown file (.md)
+  const exportToMarkdown = (analysisText: string) => {
+    // Create a Blob containing the text data
+    const blob = new Blob([analysisText], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    
+    // Create a hidden link and trigger the download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `DataPilot_Stats_Report_${new Date().toISOString().split('T')[0]}.md`;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Function 2: Export as a PDF
+  const exportToPDF = () => {
+    // This triggers the browser's native print dialog, allowing users to "Save as PDF".
+    // It is the most robust way to capture charts and text together without heavy libraries.
+    window.print();
+  };
+
+
+
   return (
     <div className="flex h-screen bg-[#0B1120] text-slate-200 font-sans selection:bg-cyan-500/30 selection:text-cyan-50">
       
@@ -212,11 +240,31 @@ export default function PremiumDashboard() {
       <div className="flex-1 flex flex-col relative bg-[#0F172A]" ref={reportRef}>
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 rounded-full filter blur-[120px] pointer-events-none"></div>
 
-        <div className="absolute top-4 right-6 z-20">
+        <div className="absolute top-4 right-6 z-20 flex items-center gap-2">
             {activeSession.file && activeSession.messages.length > 1 && (
-                <button onClick={exportPDF} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition-all border border-slate-700/50 shadow-sm">
-                    <Download className="w-4 h-4" /> Export Report
-                </button>
+                <>
+                    <button
+                      onClick={() => exportToMarkdown(
+                        activeSession.messages
+                          .map((msg) => {
+                            if (msg.type === 'user') return `User: ${msg.content}`;
+                            if (msg.type === 'ai') return `AI:\n${msg.content || ''}\n${msg.code || ''}`;
+                            return '';
+                          })
+                          .filter(Boolean)
+                          .join('\n\n')
+                      )}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition-all border border-slate-700/50 shadow-sm"
+                    >
+                        <Download className="w-4 h-4" /> Export Report
+                    </button>
+                    <button
+                      onClick={exportToPDF}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition-all border border-slate-700/50 shadow-sm"
+                    >
+                        <Download className="w-4 h-4" /> Export PDF
+                    </button>
+                </>
             )}
         </div>
 
