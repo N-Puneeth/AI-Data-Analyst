@@ -66,6 +66,39 @@ export default function PremiumDashboard() {
     } : s));
   };
 
+  // --- NEW MARKDOWN EXPORT FUNCTION ---
+  const exportToMarkdown = () => {
+    if (!activeSession || activeSession.messages.length === 0) return;
+
+    let markdownContent = `# DataPilot Analysis Report\n`;
+    markdownContent += `**Dataset:** ${activeSession.title}\n`;
+    markdownContent += `**Generated on:** ${new Date().toLocaleString()}\n\n---\n\n`;
+
+    activeSession.messages.forEach(msg => {
+      if (msg.type === 'user') {
+        markdownContent += `### 👤 You asked:\n${msg.content}\n\n`;
+      } else if (msg.type === 'ai' && msg.content) {
+        markdownContent += `### 🤖 AI Analysis:\n${msg.content}\n\n`;
+        if (msg.code) {
+          markdownContent += `**Generated Python Code:**\n\`\`\`python\n${msg.code}\n\`\`\`\n\n`;
+        }
+      } else if (msg.type === 'error') {
+        markdownContent += `### ⚠️ Error:\n${msg.content}\n\n`;
+      }
+    });
+
+    const blob = new Blob([markdownContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeSession.title.replace(/\s+/g, '_')}_Report.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // --- EXISTING PDF EXPORT FUNCTION ---
   const exportPDF = async () => {
     if (!reportRef.current) return;
     const canvas = await html2canvas(reportRef.current, { backgroundColor: '#0F172A' });
@@ -97,7 +130,7 @@ export default function PremiumDashboard() {
 
     const aiId = (Date.now() + 1).toString();
     addMessage({ id: aiId, type: 'ai', content: '', status: ['Initializing secure workspace...', 'Writing Python script...', 'Analyzing data...'] });
-
+    
     const formData = new FormData();
     formData.append('file', uploadedFile);
     formData.append('session_id', currentSessionId);
@@ -154,39 +187,11 @@ export default function PremiumDashboard() {
     }
   };
 
-
-  // Function 1: Export as a Markdown file (.md)
-  const exportToMarkdown = (analysisText: string) => {
-    // Create a Blob containing the text data
-    const blob = new Blob([analysisText], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    
-    // Create a hidden link and trigger the download
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `DataPilot_Stats_Report_${new Date().toISOString().split('T')[0]}.md`;
-    document.body.appendChild(link);
-    link.click();
-    
-    // Cleanup
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  // Function 2: Export as a PDF
-  const exportToPDF = () => {
-    // This triggers the browser's native print dialog, allowing users to "Save as PDF".
-    // It is the most robust way to capture charts and text together without heavy libraries.
-    window.print();
-  };
-
-
-
   return (
     <div className="flex h-screen bg-[#0B1120] text-slate-200 font-sans selection:bg-cyan-500/30 selection:text-cyan-50">
       
-      {/* CHATGPT-STYLE SIDEBAR */}
-      <div className="w-64 bg-[#080C17] border-r border-slate-800/80 flex flex-col z-20 shadow-xl">
+      {/* CHATGPT-STYLE SIDEBAR (Added .no-print) */}
+      <div className="no-print w-64 bg-[#080C17] border-r border-slate-800/80 flex flex-col z-20 shadow-xl">
         <div className="p-5 flex items-center gap-3 cursor-pointer">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
             <Navigation className="w-4 h-4 text-white" strokeWidth={2.5}/>
@@ -240,30 +245,22 @@ export default function PremiumDashboard() {
       <div className="flex-1 flex flex-col relative bg-[#0F172A]" ref={reportRef}>
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 rounded-full filter blur-[120px] pointer-events-none"></div>
 
-        <div className="absolute top-4 right-6 z-20 flex items-center gap-2">
+        {/* --- UPDATED EXPORT BUTTONS --- */}
+        <div className="absolute top-4 right-6 z-20 flex gap-3 no-print">
             {activeSession.file && activeSession.messages.length > 1 && (
                 <>
-                    <button
-                      onClick={() => exportToMarkdown(
-                        activeSession.messages
-                          .map((msg) => {
-                            if (msg.type === 'user') return `User: ${msg.content}`;
-                            if (msg.type === 'ai') return `AI:\n${msg.content || ''}\n${msg.code || ''}`;
-                            return '';
-                          })
-                          .filter(Boolean)
-                          .join('\n\n')
-                      )}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition-all border border-slate-700/50 shadow-sm"
-                    >
-                        <Download className="w-4 h-4" /> Export Report
-                    </button>
-                    <button
-                      onClick={exportToPDF}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition-all border border-slate-700/50 shadow-sm"
-                    >
-                        <Download className="w-4 h-4" /> Export PDF
-                    </button>
+                  <button 
+                    onClick={exportToMarkdown} 
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition-all border border-slate-700/50 shadow-sm"
+                  >
+                      <FileText className="w-4 h-4 text-cyan-400" /> Markdown
+                  </button>
+                  <button 
+                    onClick={exportPDF} 
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-semibold text-white transition-all shadow-md shadow-blue-900/20"
+                  >
+                      <Download className="w-4 h-4" /> PDF
+                  </button>
                 </>
             )}
         </div>
@@ -376,8 +373,8 @@ export default function PremiumDashboard() {
               </div>
             </div>
 
-            {/* Input Box */}
-            <div className="p-5 bg-transparent z-20 pb-8">
+            {/* Input Box (Added .no-print) */}
+            <div className="no-print p-5 bg-transparent z-20 pb-8">
               <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto relative flex items-end bg-slate-800/80 backdrop-blur-md border border-slate-700/80 rounded-2xl overflow-hidden focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/50 transition-all shadow-2xl">
                 <textarea 
                   value={input}
