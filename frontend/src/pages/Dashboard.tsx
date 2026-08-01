@@ -5,7 +5,7 @@ import {
   Upload, Navigation, FileText, CheckCircle2, 
   Send, Plus, AlertTriangle, Terminal, BarChart2, Download, LogOut, MessageSquare
 } from 'lucide-react';
-
+import { useReactToPrint } from 'react-to-print';
 
 interface Message {
   id: string;
@@ -99,12 +99,12 @@ export default function PremiumDashboard() {
 
   // --- EXISTING PDF EXPORT FUNCTION ---
   // --- NATIVE PDF EXPORT FUNCTION ---
-  const exportPDF = () => {
-    // This triggers the browser's print dialog. 
-    // The user can select "Save as PDF" as the destination.
-    // Our @media print CSS will automatically hide the sidebars and buttons!
-    window.print();
-  };
+  // --- FOOLPROOF REACT-TO-PRINT PDF EXPORT ---
+  const exportPDF = useReactToPrint({
+    contentRef: reportRef,
+    documentTitle: 'DataPilot_Analysis_Report',
+    onAfterPrint: () => alert('PDF export completed!'),
+  });
 
   const downloadImage = (base64String: string, index: number) => {
     const link = document.createElement('a');
@@ -255,7 +255,7 @@ export default function PremiumDashboard() {
                     onClick={exportPDF} 
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs font-semibold text-white transition-all shadow-md shadow-blue-900/20"
                   >
-                      <Download className="w-4 h-4" /> PDF
+                    <Download className="w-4 h-4" /> PDF
                   </button>
                 </>
             )}
