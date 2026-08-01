@@ -9,9 +9,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="DataPilot AI API")
 
+origins = [
+    "http://localhost:5173",
+    "https://datapilot-app.onrender.com"  # No trailing slash at the end!
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=origins,  # <-- Pass the list here
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
