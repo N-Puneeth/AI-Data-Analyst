@@ -17,3 +17,4 @@ python-dotenv==1.0.1
 PyJWT==2.8.0
 google-generativeai
 e2b_code_interpreter
+bcrypt==3.2.2
