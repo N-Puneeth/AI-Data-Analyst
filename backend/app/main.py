@@ -18,10 +18,10 @@ app.add_middleware(
 )
 
 # We add prefix="/api" so the backend matches the frontend exactly
-app.include_router(auth.router, prefix="/api")
-app.include_router(data.router, prefix="/api")
-app.include_router(ai.router, prefix="/api")
-app.include_router(agent.router, prefix="/api")
+app.include_router(auth.router)
+app.include_router(data.router)
+app.include_router(ai.router)
+app.include_router(agent.router)
 
 @app.get("/")
 def read_root():
