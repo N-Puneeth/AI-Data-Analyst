@@ -276,7 +276,7 @@ function DataPilotAI() {
         <section className="max-w-6xl mx-auto px-4 py-20">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 border-b-2 border-slate-200 mb-10">
             <div className="pb-6 cursor-pointer group">
-              <Compass className="w-8 h-8 text-blue-600 mb-4" />
+              <Compass className="w-8 h-8 text-slate-400 group-hover:text-blue-600 mb-4 transition-colors" />
               <h3 className="text-2xl font-extrabold text-slate-400 group-hover:text-slate-900 mb-2 transition-colors">Visual Navigation</h3>
               <p className="text-slate-600 text-sm mb-4 font-medium">Automatically map your datasets into highly interactive, publication-ready charts.</p>
             </div>
