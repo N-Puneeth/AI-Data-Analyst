@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, data, ai , agent
+from app.routers import auth, data, ai , agent, sessions
 from app.core.database import Base, engine
 
 # 👇 THIS LINE BUILDS THE SQLITE DATABASE FILE 👇
@@ -25,6 +25,7 @@ app.add_middleware(
 # We add prefix="/api" so the backend matches the frontend exactly
 app.include_router(auth.router)
 app.include_router(data.router)
+app.include_router(sessions.router, prefix="/sessions")
 app.include_router(ai.router)
 app.include_router(agent.router)
 

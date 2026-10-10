@@ -1,83 +1,146 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import selectinload
 from typing import Optional
+import os
+import uuid
 from e2b_code_interpreter import Sandbox
 import google.generativeai as genai
-import os
-import re
 import textwrap
-from dotenv import load_dotenv
 
-load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+from app.core.database import get_db
+from app.core.security import get_current_user
+from app.core.config import settings
+from app.auth.models import User
+from app.datasets.models import AnalysisSession, Dataset, DatasetStatus, ConversationMessage, MessageRole, AnalysisResult
+from app.services.profiler import profile_dataset
+from app.services.code_validator import validate_python_code
 
+router = APIRouter(prefix="/agent", tags=["AI Code Agent"])
+
+# Configure Gemini
+api_key = settings.GEMINI_API_KEY
 model = None
 if api_key:
     genai.configure(api_key=api_key)
     try:
-        print("🔄 Scanning for available AI models for the Agent...")
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                model_name = m.name.replace("models/", "")
-                if "vision" not in model_name:
-                    try:
-                        temp_model = genai.GenerativeModel(model_name)
-                        temp_model.generate_content("test")
-                        model = temp_model
-                        print(f"✅ Agent AI Connected Successfully: {model_name}")
-                        break 
-                    except Exception:
-                        continue
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")
     except Exception as e:
-        print(f"⚠️ Failed to scan models: {e}")
-
-router = APIRouter(prefix="/agent", tags=["AI Code Agent"])
-
-# GLOBAL SESSION STATE: This keeps the sandbox and AI memory alive between messages!
-active_sessions = {}
+        print(f"⚠️ Failed to init Gemini model: {e}")
 
 @router.post("/analyze")
 async def analyze_with_agent(
     prompt: str = Form(...),
+    session_id: int = Form(...),
     file: Optional[UploadFile] = File(None),
-    session_id: str = Form("default_session")
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    e2b_key = os.getenv("E2B_API_KEY")
+    e2b_key = settings.E2B_API_KEY
     if not api_key or not e2b_key:
         raise HTTPException(status_code=500, detail="Missing API Keys in .env file.")
     if not model:
-        raise HTTPException(status_code=500, detail="No compatible AI models found.")
+        raise HTTPException(status_code=500, detail="AI Model not configured.")
+        
+    # Get session
+    session_record = db.query(AnalysisSession).filter(
+        AnalysisSession.id == session_id,
+        AnalysisSession.user_id == current_user.id
+    ).options(selectinload(AnalysisSession.messages)).first()
+    
+    if not session_record:
+        raise HTTPException(status_code=404, detail="Session not found.")
         
     try:
-        # 1. Check if this is a new session or an existing one
-        if session_id not in active_sessions:
+        # 1. Connect to or create E2B Sandbox
+        sandbox = None
+        if session_record.sandbox_id:
+            try:
+                sandbox = Sandbox.connect(session_record.sandbox_id)
+            except Exception:
+                sandbox = None
+                
+        if not sandbox:
             print(f"🚀 [Session: {session_id}] Booting new Persistent Sandbox...")
-            active_sessions[session_id] = {
-                "sandbox": Sandbox.create(timeout=3600), # Stays alive for 1 hour
-                "chat": model.start_chat(history=[]),    # Keeps conversational memory
-                "remote_path": None
-            }
-            
-        session = active_sessions[session_id]
-        sandbox = session["sandbox"]
-        chat = session["chat"]
+            sandbox = Sandbox.create(timeout=3600)
+            session_record.sandbox_id = sandbox.id
+            db.commit()
 
-        # 2. Upload file ONLY if a new file is provided
+        # 2. File upload logic
+        dataset = None
         if file:
+            # Uploading new dataset
+            ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+            unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+            os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+            local_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+            
             file_bytes = await file.read()
-            filename = file.filename
-            remote_path = f"/home/user/{filename}"
+            with open(local_path, "wb") as f:
+                f.write(file_bytes)
+                
+            # Profile dataset
+            profile = profile_dataset(file_bytes, file.filename)
+            
+            # Create Dataset record
+            dataset = Dataset(
+                name=file.filename,
+                original_filename=file.filename,
+                file_path=local_path,
+                file_format=ext,
+                file_size=len(file_bytes),
+                row_count=profile.get("row_count"),
+                col_count=profile.get("col_count"),
+                column_metadata=profile.get("columns"),
+                profiling_summary=profile,
+                status=DatasetStatus.COMPLETED,
+                owner_id=current_user.id
+            )
+            db.add(dataset)
+            db.commit()
+            db.refresh(dataset)
+            
+            # Link to session
+            session_record.dataset_id = dataset.id
+            db.commit()
+            
+            # Upload to sandbox
+            remote_path = f"/home/user/{file.filename}"
             sandbox.files.write(remote_path, file_bytes)
-            session["remote_path"] = remote_path
-            print(f"📁 [Session: {session_id}] Uploaded {filename} to Sandbox.")
+            
+        else:
+            if session_record.dataset_id:
+                dataset = db.query(Dataset).filter(Dataset.id == session_record.dataset_id).first()
+                if not dataset:
+                    raise HTTPException(status_code=400, detail="Associated dataset not found.")
+                
+                remote_path = f"/home/user/{dataset.original_filename}"
+                # Ensure it exists in sandbox
+                try:
+                    sandbox.files.read(remote_path)
+                except Exception:
+                    # Upload it again if sandbox was restarted
+                    with open(dataset.file_path, "rb") as f:
+                        sandbox.files.write(remote_path, f.read())
+            else:
+                 raise HTTPException(status_code=400, detail="No dataset uploaded to this session yet.")
 
-        remote_path = session["remote_path"]
-        if not remote_path:
-             raise HTTPException(status_code=400, detail="No dataset uploaded to this session yet.")
-
-        # 3. Prompt the AI (Now using chat.send_message so it remembers history!)
+        # 3. Construct prompt with context
+        history = [
+            {"role": "user" if m.role == MessageRole.USER else "model", "parts": [m.content]}
+            for m in session_record.messages if m.role in (MessageRole.USER, MessageRole.AI)
+        ]
+        
+        # Prepare system instructions based on dataset profile
+        profile_info = ""
+        if dataset and dataset.profiling_summary:
+             cols = [c["name"] for c in dataset.profiling_summary.get("columns", [])]
+             profile_info = f"Columns available: {cols}\nRow count: {dataset.row_count}\n"
+             
         system_prompt = textwrap.dedent(f"""
         You are an elite Python Data Scientist. 
         Dataset path: '{remote_path}'
+        Dataset Profile: {profile_info}
         User Request: {prompt}
         
         Write a complete, working Python script to analyze this data or answer the user's request.
@@ -91,24 +154,44 @@ async def analyze_with_agent(
         6. Return strictly Python code. No conversational text.
         """)
         
-        print("🧠 Generating Python Code with Gemini (with Chat History)...")
+        # Create user message record
+        user_msg = ConversationMessage(
+            role=MessageRole.USER,
+            content=prompt,
+            session_id=session_id
+        )
+        db.add(user_msg)
+        db.commit()
+
+        print("🧠 Generating Python Code with Gemini...")
+        chat = model.start_chat(history=history)
         ai_response = chat.send_message(system_prompt)
         raw_text = ai_response.text
         
-        # Extract and format code block
-        code_matches = re.findall(r'```(?:python)?(.*?)```', raw_text, re.DOTALL | re.IGNORECASE)
-        if code_matches:
-            extracted_code = "\n".join([textwrap.dedent(block).strip() for block in code_matches])
-        else:
-            extracted_code = textwrap.dedent(raw_text).strip()
-            
-        python_code = extracted_code
+        # Extract and validate code block
+        from app.services.code_validator import extract_code_from_response
+        extracted_code = extract_code_from_response(raw_text)
+        
+        # Validate the code
+        python_code = validate_python_code(extracted_code, dataset_path=remote_path)
         
         print("⚙️ Executing AI Code in Persistent Sandbox...")
         execution = sandbox.run_code(python_code)
         
         if execution.error:
-            raise Exception(f"{execution.error.name} - {execution.error.value}")
+            error_msg = f"{execution.error.name} - {execution.error.value}"
+            # Save error message
+            err_msg = ConversationMessage(
+                role=MessageRole.ERROR,
+                content=f"Error executing code: {error_msg}",
+                generated_code=python_code,
+                execution_status="error",
+                error_detail=error_msg,
+                session_id=session_id
+            )
+            db.add(err_msg)
+            db.commit()
+            raise Exception(error_msg)
             
         print("🎨 Extracting Visualizations & Logs...")
         printed_logs = "\n".join(execution.logs.stdout) if execution.logs.stdout else ""
@@ -126,12 +209,35 @@ async def analyze_with_agent(
         if not final_insights:
             final_insights = "Execution finished successfully, but no text output was printed."
             
+        # Create AI message record
+        ai_msg = ConversationMessage(
+            role=MessageRole.AI,
+            content=final_insights,
+            generated_code=python_code,
+            execution_status="success",
+            session_id=session_id
+        )
+        db.add(ai_msg)
+        db.commit()
+        db.refresh(ai_msg)
+        
+        # Create AnalysisResult record
+        result_record = AnalysisResult(
+            summary=final_insights,
+            session_id=session_id,
+            message_id=ai_msg.id,
+            dataset_id=dataset.id if dataset else None
+        )
+        db.add(result_record)
+        db.commit()
+
         print("✅ Execution Complete!")
         return {
             "message": "Analysis executed successfully!",
             "insights": final_insights,
             "ai_code_written": python_code,
-            "images": base64_images
+            "images": base64_images,
+            "session_id": session_id
         }
             
     except Exception as e:
