@@ -5,19 +5,20 @@ from app.routers import data, ai , agent, sessions
 from app.auth.routers import router as auth_router
 from app.core.database import Base, engine
 
+from app.core.config import settings
+
 # 👇 THIS LINE BUILDS THE SQLITE DATABASE FILE 👇
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="DataPilot AI API")
 
-origins = [
-    "http://localhost:5173",
-    "https://datapilot-app.onrender.com"  # No trailing slash at the end!
+origins = settings.cors_origin_list + [
+    "https://datapilot-app.onrender.com"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # <-- Pass the list here
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

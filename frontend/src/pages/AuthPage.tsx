@@ -50,7 +50,18 @@ export default function AuthPage() {
         setPasswordConfirm('');
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Authentication failed. Please try again.');
+      console.error("Auth Error:", err);
+      let errorMsg = 'Authentication failed. Please try again.';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMsg = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMsg = err.response.data.detail[0]?.msg || errorMsg;
+        }
+      } else if (!err.response) {
+        errorMsg = 'Network Error. Could not connect to the server.';
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

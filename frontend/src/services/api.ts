@@ -1,8 +1,11 @@
 import axios from 'axios';
 import type { AuthResponse, User, AnalysisSession, AnalysisResponse, Dataset, ChatRequest, ChatResponse } from '../types';
 
+const isProduction = import.meta.env.PROD;
+const apiUrl = import.meta.env.VITE_API_URL || (isProduction ? 'https://datapilot-app.onrender.com' : 'http://localhost:8000');
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: apiUrl,
 });
 
 api.interceptors.request.use((config) => {
