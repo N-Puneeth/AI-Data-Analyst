@@ -44,8 +44,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const register = async (data: { name?: string; email: string; password: string; password_confirm: string }) => {
     const response = await authApi.register(data);
-    localStorage.setItem('token', response.access_token);
-    setUser(response.user);
+    // DO NOT auto-login on register. Force the user to manually sign in.
     return response;
   };
 
