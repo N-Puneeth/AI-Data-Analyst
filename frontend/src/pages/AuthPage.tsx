@@ -14,7 +14,7 @@ import {
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { login, register } = useAuth();
+  const { login, register, isAuthenticated } = useAuth();
   
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
@@ -27,6 +27,13 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Automatically redirect when authenticated (fixes React state race condition on login)
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -36,7 +43,7 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         await login(email, password);
-        navigate('/dashboard');
+        // Navigation is now handled by the useEffect watching isAuthenticated
       } else {
         if (password !== passwordConfirm) {
           setError('Passwords do not match');
